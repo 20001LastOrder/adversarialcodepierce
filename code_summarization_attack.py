@@ -61,6 +61,7 @@ def read_examples(filename):
 
 
 def model_func(model, tokenizer, args, input: PythonSample):
+    # input.mask_function_calls()
     code = " ".join(input.tokenized_code)
     # print(code)
     model_inputs = tokenizer(
@@ -97,7 +98,6 @@ def model_func_random_vec(
     tokenized_input = tokenizer(
         code,
         max_length=args.max_source_length,
-        # padding="max_length",
         truncation=True,
     )
     embedder = model.get_input_embeddings()
@@ -160,6 +160,7 @@ def main(args):
     model_output_function = partial(model_func, model, tokenizer, args)
 
     strategy_cls = None
+    search_budget = 60
     if args.strategy == "random":
         strategy_cls = RandomSearch
     elif args.strategy == "heuristic":
@@ -168,17 +169,24 @@ def main(args):
         strategy_cls = PermutationSearch
     elif args.strategy == "random_vector":
         strategy_cls = RandomVectorSearch
+    elif args.strategy == "none":
+        strategy_cls = RandomSearch
+        search_budget = 0
 
     original_bleus = []
     adversarial_bleus = []
     original_predictions = []
     adversarial_predictions = []
-    for i in tqdm(range(200)):
+    for i in tqdm(range(1000)):
         dataset_item, target = dataset[i]
 
-        strategy = strategy_cls(candidates=candidates, search_budget=60)
+        strategy = strategy_cls(candidates=candidates, search_budget=search_budget)
         if args.strategy == "random_vector":
-            strategy = strategy_cls(mask_token=tokenizer.bos_token, candidates=candidates, search_budget=60)
+            strategy = strategy_cls(
+                mask_token=tokenizer.bos_token,
+                candidates=candidates,
+                search_budget=search_budget,
+            )
             model_output_function = partial(
                 model_func_random_vec, model, tokenizer, args, strategy
             )
@@ -195,8 +203,10 @@ def main(args):
         adversarial_bleus.append(adversarial_example.score)
 
         original_predictions.append(model_output_function(dataset_item))
-        dataset_item.update_from_variables(adversarial_example)
-        adversarial_predictions.append(model_output_function(dataset_item))
+
+        if args.strategy != "none":
+            dataset_item.update_from_variables(adversarial_example)
+            adversarial_predictions.append(model_output_function(dataset_item))
 
         if i % args.log_freq == 0:
             log_metrics(original_bleus, adversarial_bleus)

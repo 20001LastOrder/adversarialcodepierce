@@ -30,6 +30,7 @@ def measure_distance_candidates(model, tokenizer, distribution, candidate_file_n
 
     ks_scores = []
     p_values = []
+    variances = []
 
     for candidate in tqdm(candidates):
         tokens = tokenizer(candidate, return_tensors="pt")
@@ -45,21 +46,26 @@ def measure_distance_candidates(model, tokenizer, distribution, candidate_file_n
 
         current_ks_scores = []
         current_p_values = []
+        current_variances = []
 
         for embedding in embeddings:
             result = kstest(embedding, distribution.cdf)
             current_ks_scores.append(result.statistic)
             current_p_values.append(result.pvalue)
+            current_variances.append(np.var(embedding))
 
         ks_scores.append(np.min(current_ks_scores))
         p_values.append(np.min(current_p_values))
+        variances.append(np.max(current_variances))
 
     mean_score_model = np.mean(ks_scores)
-    logger.info(f"Mean KS score: {mean_score_model}")
+    logger.info(f"Mean Variance score: {mean_score_model}")
 
     ranked_candidates = np.argsort(ks_scores).tolist()
     ranked_candidates = [candidates[i] for i in ranked_candidates]
-    ks_scores = np.sort(ks_scores).tolist()
+    ks_scores = np.sort(
+        ks_scores,
+    ).tolist()
 
     results = [
         (ranked_candidates[i], ks_scores[i]) for i in range(len(ranked_candidates))
@@ -73,26 +79,29 @@ def measure_distance_tokens(model, tokenizer, distribution):
     embedding = model.encoder.embed_tokens.weight.detach().numpy()
     ks_scores = []
     p_values = []
+    variances = []
 
     for i in tqdm(range(embedding.shape[0])):
         result = kstest(embedding[i], distribution.cdf)
         ks_scores.append(result.statistic)
         p_values.append(result.pvalue)
+        variances.append(np.var(embedding[i]))
 
-    mean_score_model = np.mean(ks_scores)
-    logger.info(f"Mean KS score: {mean_score_model}")
+    # mean_score_model = np.mean(ks_scores)
+    mean_variance = np.mean(variances)
+    logger.info(f"Mean Variance score: {mean_variance}")
 
-    ranked_tokens = np.argsort(ks_scores).tolist()
+    ranked_tokens = np.argsort(variances).tolist()
     ranked_tokens = [tokenizer.convert_ids_to_tokens([i])[0] for i in ranked_tokens]
-    ks_scores = np.sort(ks_scores).tolist()
+    variances = np.sort(variances).tolist()
 
-    results = [(ranked_tokens[i], ks_scores[i]) for i in range(len(ranked_tokens))]
+    results = [(ranked_tokens[i], variances[i]) for i in range(len(ranked_tokens))]
 
     return results
 
 
 def main():
-    model = AutoModel.from_pretrained("Salesforce/codet5-base")
+    model = AutoModel.from_pretrained("trained/code_summarization/t5")
     tokenizer = AutoTokenizer.from_pretrained(
         "Salesforce/codet5-base", add_prefix_space=True
     )
@@ -103,16 +112,18 @@ def main():
     torch.nn.init.normal_(random_embedding.weight, mean=0, std=0.02)
     ks_scores = []
     p_values = []
+    variances = []
 
-    for i in tqdm(range(1000)):
+    for i in tqdm(range(200)):
         random_sample = random_embedding(torch.tensor([i]))
         random_sample = random_sample.detach().numpy().flatten()
         result = kstest(random_sample, distribution.cdf)
         ks_scores.append(result.statistic)
         p_values.append(result.pvalue)
+        variances.append(np.var(random_sample))
 
     mean_score = np.mean(ks_scores)
-    logger.info(f"Mean KS score: {mean_score}")
+    logger.info(f"Mean Variance score: {mean_score}")
 
     if candidate_file_name is None or candidate_file_name == "":
         results = measure_distance_tokens(model, tokenizer, distribution)

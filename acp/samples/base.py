@@ -26,7 +26,7 @@ class BaseSample(BaseModel, ABC):
     def infer_properties(self):
         if self.tokenized_code is None:
             self.tokenized_code = self.tokenize(self.code)
-        self.tokenized_code[1] = "<mask>"
+        # self.tokenized_code[1] = "<mask>"
         if self.variables is None:
             self.variables = self.create_variables()
 
