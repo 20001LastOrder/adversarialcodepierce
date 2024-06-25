@@ -56,7 +56,7 @@ class HeuristicSearch(BaseSearchStrategy):
     def visit_state(self, state: VariableState, new_metric: float):
         state.score = new_metric
 
-        if state.score < self._best_state.score:
+        if state.score <= self._best_state.score:
             self._best_state = state
 
         self._current_state = state

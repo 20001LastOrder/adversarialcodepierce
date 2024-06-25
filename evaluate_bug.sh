@@ -1,4 +1,4 @@
-Bug detection
+# Bug detection
 checkpoint=trained/graphcodebert
 base_model=microsoft/graphcodebert-base
 test_filename=data/eval_synthetic/eval__VARIABLE_MISUSE__SStuB.txt-00000-of-00300
