@@ -96,6 +96,9 @@ def generate_data_token_classification(tokens, data):
 
 
 def model_func(model, tokenizer, args, program: dict, input: PythonSample):
+    # input.mask_variable_names()
+    # input.mask_function_calls(use_regex=True)
+    # input.mask_function_calls(use_regex=True)
     example = generate_data_token_classification(input.tokenized_code, program)
     tokenized = tokenize_and_align_labels(example, tokenizer, args.max_length)
 
@@ -190,11 +193,14 @@ def main(args):
     attack_results = []
     original_results = []
     predicted_results = []
+    labels = []
 
     for i in tqdm(range(len(dataset))):
         dataset_item, program = dataset[i]
-        strategy = strategy_cls(candidates=candidates, search_budget=60)
+        # strategy = strategy_cls(candidates=candidates, search_budget=60)
         original_prediction = model_func(model, tokenizer, args, program, dataset_item)
+
+        labels.append(program["error_location"] - 1)  # exclude the [NEW_LINE] token
 
         if args.strategy == "random_vector":
             strategy = strategy_cls(
@@ -227,6 +233,10 @@ def main(args):
             log_metrics(attack_results)
 
     log_metrics(attack_results)
+
+    # calculate accuracy
+    equal = sum([1 for i, j in zip(original_results, labels) if i == j])
+    logger.info(f"Accuracy: {equal / len(labels) * 100:.2f}%")
 
     output_name = f"{args.strategy}_{args.adv_candidate_file.split('/')[-1]}.csv"
     output_path = os.path.join(args.output_folder, output_name)

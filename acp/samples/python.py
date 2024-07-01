@@ -1,4 +1,6 @@
 import ast
+import keyword
+import re
 import tokenize
 from functools import cached_property
 from io import BytesIO
@@ -64,30 +66,49 @@ class PythonSample(BaseSample):
             for i in range(len(variable_names))
         ]
 
-    def mask_function_definitions(self, mask_token: str = "<mask>") -> str:
-        collector = VariableCollector()
-        collector.visit(self.ast)
+    def mask_function_definitions(
+        self, mask_token: str = "<mask>", use_regex=False
+    ) -> str:
+        if not use_regex:
+            collector = VariableCollector()
+            collector.visit(self.ast)
 
-        function_locs = get_func_def_locations(
-            collector.defined_functions, self.tokenized_code
-        )
+            function_locs = get_func_def_locations(
+                collector.defined_functions, self.tokenized_code
+            )
 
-        for locs in function_locs:
-            for loc in locs:
-                self.tokenized_code[loc] = mask_token
+            for locs in function_locs:
+                for loc in locs:
+                    self.tokenized_code[loc] = mask_token
+        else:
+            pattern = re.compile(r"def (.+)\(")
+            for i, token in enumerate(self.tokenized_code):
+                if pattern.match(token):
+                    self.tokenized_code[i] = f"def {mask_token}("
 
-    def mask_function_calls(self, func_prefix="function") -> str:
-        collector = VariableCollector()
-        collector.visit(self.ast)
+    def mask_function_calls(self, func_prefix="function", use_regex=False) -> str:
+        if not use_regex:
+            collector = VariableCollector()
+            collector.visit(self.ast)
 
-        function_calls = list(collector.function_calls)
-        function_call_locations = get_func_def_locations(
-            function_calls, self.tokenized_code
-        )
+            function_calls = list(collector.function_calls)
+            function_call_locations = get_func_def_locations(
+                function_calls, self.tokenized_code
+            )
 
-        for i, locs in enumerate(function_call_locations):
-            for loc in locs:
-                self.tokenized_code[loc] = f"{func_prefix}_{i}"
+            for i, locs in enumerate(function_call_locations):
+                for loc in locs:
+                    self.tokenized_code[loc] = f"{func_prefix}_{i}"
+        else:
+            func_name_map = {}
+            func_id = 0
+            for i, token in enumerate(self.tokenized_code):
+                if token == "(" and self.tokenized_code[i - 1] not in keyword.kwlist:
+                    func_name = self.tokenized_code[i - 1]
+                    if func_name not in func_name_map:
+                        func_name_map[func_name] = f"{func_prefix}_{func_id}"
+                        func_id += 1
+                    self.tokenized_code[i - 1] = func_name_map[func_name]
 
     def tokenize(self, code: str) -> list[str]:
         tokens = tokenize.tokenize(BytesIO(code.encode("utf-8")).readline)
