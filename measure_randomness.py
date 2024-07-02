@@ -13,8 +13,8 @@ logger.remove(0)
 logger.add(sys.stderr, level="INFO", serialize=False)
 
 seed = 42
-output_name = "randomness_t5_variables.json"
-candidate_file_name = "results/variables_map.json"
+output_name = "randomness_codebert_variables_codeclonde.json"
+candidate_file_name = "results/variables_map_java.json"
 
 
 def set_seed(seed):
@@ -38,11 +38,11 @@ def measure_distance_candidates(model, tokenizer, distribution, candidate_file_n
         # remove the special tokens
         tokens["input_ids"] = tokens["input_ids"][0][1:-1]
 
-        # embeddings = (
-        #     model.embeddings.word_embeddings(tokens["input_ids"]).detach().numpy()
-        # )
+        embeddings = (
+            model.embeddings.word_embeddings(tokens["input_ids"]).detach().numpy()
+        )
 
-        embeddings = model.encoder.embed_tokens(tokens["input_ids"]).detach().numpy()
+        # embeddings = model.encoder.embed_tokens(tokens["input_ids"]).detach().numpy()
 
         current_ks_scores = []
         current_p_values = []
@@ -75,8 +75,8 @@ def measure_distance_candidates(model, tokenizer, distribution, candidate_file_n
 
 
 def measure_distance_tokens(model, tokenizer, distribution):
-    # embedding = model.embeddings.word_embeddings.weight.detach().numpy()
-    embedding = model.encoder.embed_tokens.weight.detach().numpy()
+    embedding = model.embeddings.word_embeddings.weight.detach().numpy()
+    # embedding = model.encoder.embed_tokens.weight.detach().numpy()
     ks_scores = []
     p_values = []
     variances = []
@@ -88,22 +88,21 @@ def measure_distance_tokens(model, tokenizer, distribution):
         variances.append(np.var(embedding[i]))
 
     # mean_score_model = np.mean(ks_scores)
-    mean_variance = np.mean(variances)
-    logger.info(f"Mean Variance score: {mean_variance}")
+    mean_ks_distance = np.mean(ks_scores)
+    logger.info(f"Mean Randomness score: {mean_ks_distance}")
 
-    ranked_tokens = np.argsort(variances).tolist()
+    ranked_tokens = np.argsort(ks_scores).tolist()
     ranked_tokens = [tokenizer.convert_ids_to_tokens([i])[0] for i in ranked_tokens]
-    variances = np.sort(variances).tolist()
+    ks_scores = np.sort(ks_scores).tolist()
 
-    results = [(ranked_tokens[i], variances[i]) for i in range(len(ranked_tokens))]
-
+    results = [(ranked_tokens[i], ks_scores[i]) for i in range(len(ranked_tokens))]
     return results
 
 
 def main():
-    model = AutoModel.from_pretrained("trained/code_summarization/t5")
+    model = AutoModel.from_pretrained("trained/code_clone/best_checkpoint")
     tokenizer = AutoTokenizer.from_pretrained(
-        "Salesforce/codet5-base", add_prefix_space=True
+        "microsoft/codebert-base", add_prefix_space=True
     )
 
     distribution = norm(0, 0.02)
@@ -123,7 +122,7 @@ def main():
         variances.append(np.var(random_sample))
 
     mean_score = np.mean(ks_scores)
-    logger.info(f"Mean Variance score: {mean_score}")
+    logger.info(f"Mean randomness score: {mean_score}")
 
     if candidate_file_name is None or candidate_file_name == "":
         results = measure_distance_tokens(model, tokenizer, distribution)

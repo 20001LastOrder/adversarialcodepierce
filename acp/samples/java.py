@@ -9,16 +9,20 @@ from acp.samples.base import BaseSample, Variable
 
 parser = get_parser("java")
 
-edge_case_types = {"method_invocation", "field_access", "method_declaration"}
+edge_case_types = {
+    "method_invocation",
+    "field_access",
+    "method_declaration",
+    "marker_annotation",
+}
 
 
 def collect_varaible_tokens(node, pos_to_token_map, variables=[]):
     if node.type == "identifier" and (
         node.parent.type not in edge_case_types
-        or node
-        == node.parent.children[
-            0
-        ]  # check if the identifier is the first child of the parent
+        or (
+            node == node.parent.children[0] and node.parent.children[1].type == "."
+        )  # check if the identifier is an object access
     ):
         start_byte = node.start_byte
         end_byte = node.end_byte
@@ -77,6 +81,9 @@ class JavaSample(BaseSample):
         variable_map = defaultdict(list)
 
         for variable_idx in variables:
+            if self.tokenized_code[variable_idx][0].isupper():
+                # ignore identifiers that start with uppercase, these are likely class names
+                continue
             variable_map[self.tokenized_code[variable_idx]].append(variable_idx)
 
         return [
